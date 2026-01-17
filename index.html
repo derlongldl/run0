@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練節拍器 V2.1</title>
+<title>跑步教練節拍器 V2.2 - 高靈敏版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root { --primary: #ff6a00; --bg: #f4f7f9; --card: #ffffff; }
@@ -39,7 +39,7 @@ button { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight:
   <div style="margin-top: 15px; display: flex; align-items: center; justify-content: space-between;" class="info-text">
     <div>
       <label>循環組數：</label>
-      <input id="loopCount" type="number" value="5" onchange="updateLoops(this.value)">
+      <input id="loopCount" type="number" value="5" oninput="updateLoops(this.value)">
     </div>
     <div style="font-weight: bold;">
       預計合計：<span id="totalPlanTime" style="color: var(--primary);">0</span> 分鐘
@@ -60,11 +60,11 @@ button { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight:
 
 <div class="btn-group">
   <button id="mainBtn" onclick="toggleStart()" class="btn-start">開始訓練</button>
-  <button id="finishBtn" onclick="stopRun(true)" class="btn-finish">結束並儲存</button>
+  <button id="finishBtn" onclick="requestSave()" class="btn-finish">結束並儲存</button>
 </div>
 
 <div class="card" style="margin-top: 20px;">
-  <strong>歷史紀錄 (TCX)</strong>
+  <strong>歷史紀錄 (可匯出 TCX)</strong>
   <div id="historyList"></div>
 </div>
 
@@ -78,7 +78,7 @@ const DEFAULT_PLAN = [
   { name: '舒緩', bpm: 180, sec: 180 }
 ];
 
-let config = JSON.parse(localStorage.getItem('run_config_v2')) || { plan: DEFAULT_PLAN, loops: 5 };
+let config = JSON.parse(localStorage.getItem('run_config_v2.2')) || { plan: DEFAULT_PLAN, loops: 5 };
 
 function initTable() {
   const body = document.getElementById('planBody');
@@ -95,13 +95,13 @@ function initTable() {
 
 function updateConfig(idx, key, val) {
   config.plan[idx][key] = parseInt(val) || 0;
-  localStorage.setItem('run_config_v2', JSON.stringify(config));
+  localStorage.setItem('run_config_v2.2', JSON.stringify(config));
   calcTotalPlanTime();
 }
 
 function updateLoops(val) {
   config.loops = parseInt(val) || 1;
-  localStorage.setItem('run_config_v2', JSON.stringify(config));
+  localStorage.setItem('run_config_v2.2', JSON.stringify(config));
   calcTotalPlanTime();
 }
 
@@ -133,7 +133,6 @@ function haversine(lat1, lon1, lat2, lon2) {
 
 function startGPS() {
   if (!navigator.geolocation) return;
-  
   const options = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
   
   watchId = navigator.geolocation.watchPosition(pos => {
@@ -141,19 +140,16 @@ function startGPS() {
     const now = new Date();
     document.getElementById('gpsInfo').innerText = `精度: ±${Math.round(accuracy)}m | 更新: ${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
     
-    // 精度過濾 (50公尺內皆視為可用，避免完全不動)
-    if (accuracy < 50) {
+    if (accuracy < 60) {
       if (lastPos) {
         const d = haversine(lastPos.lat, lastPos.lon, latitude, longitude);
-        
-        // 優化：單次位移超過 1.5 公尺才計入，但上限放寬到 50 公尺 (避免跑步中突然大跳點)
-        if (d > 1.5 && d < 50) { 
+        // 優化：針對超慢跑，將門檻下修至 0.3 公尺
+        if (d > 0.3 && d < 50) { 
           totalDist += d;
-          document.getElementById('distance').innerText = (totalDist / 1000).toFixed(2);
+          document.getElementById('distance').innerText = (totalDist / 1000).toFixed(3); // 增加一位小數
           updatePace();
         }
       }
-      // 重點：只要精度夠，不論位移多少都更新最後座標，避免累積出巨大的斷層
       lastPos = { lat: latitude, lon: longitude };
       trackPoints.push({ lat: latitude, lon: longitude, time: now.toISOString(), dist: totalDist });
     }
@@ -162,7 +158,7 @@ function startGPS() {
   }, options);
 }
 
-/* ---------------- 節拍器 & 流程 ---------------- */
+/* ---------------- 節拍器邏輯 ---------------- */
 function playBeep() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -198,7 +194,6 @@ async function runSession() {
     }
   }
   if (isRunning) await performStage(plan[4], "🚶 舒緩中");
-
   if (isRunning) enterOvertime(plan[4]);
 }
 
@@ -228,7 +223,8 @@ function enterOvertime(lastStage) {
   document.getElementById('status').innerText = "✨ 訓練達標 (持續計時與里程)";
   document.getElementById('displayCard').classList.add('overtime');
   document.getElementById('finishBtn').style.display = 'block';
-  document.getElementById('mainBtn').innerText = "放棄不儲存";
+  document.getElementById('mainBtn').innerText = "停止(確認數據)";
+  document.getElementById('mainBtn').className = "btn-stop";
   document.getElementById('countdown').innerText = "∞";
 
   const beatInterval = 60000 / lastStage.bpm;
@@ -238,7 +234,7 @@ function enterOvertime(lastStage) {
   }, beatInterval);
 }
 
-/* ---------------- 功能輔助 ---------------- */
+/* ---------------- 儲存確認邏輯 ---------------- */
 function toggleStart() {
   if (!isRunning) {
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
@@ -246,14 +242,37 @@ function toggleStart() {
     document.getElementById('mainBtn').className = "btn-stop";
     runSession();
   } else {
-    if (confirm("訓練尚未結束，確定要停止嗎？(不會儲存紀錄)")) {
-      stopRun(false);
-    }
+    requestSave(); // 按下強制停止也進入確認視窗
   }
 }
 
-function stopRun(shouldSave) {
-  if (shouldSave) saveToHistory();
+function requestSave() {
+  // 先停止所有計時與定位
+  isRunning = false;
+  isOvertime = false;
+  clearInterval(timerId);
+  if (watchId) navigator.geolocation.clearWatch(watchId);
+
+  // 彈出確認/修正視窗
+  const currentKm = (totalDist / 1000).toFixed(3);
+  const userConfirm = confirm(`訓練已暫停。\n本次累積距離為: ${currentKm} km\n是否需要修正距離後儲存？`);
+  
+  if (userConfirm) {
+    const finalKm = prompt("請輸入最終距離 (km):", currentKm);
+    if (finalKm !== null) {
+      saveToHistory(parseFloat(finalKm));
+      stopRun(true);
+    } else {
+      // 使用者取消 prompt，視同放棄儲存或想繼續回到準備狀態
+      stopRun(false);
+    }
+  } else {
+    // 使用者點選「取消」，直接不儲存
+    stopRun(false);
+  }
+}
+
+function stopRun(isSaved) {
   isRunning = false;
   isOvertime = false;
   clearInterval(timerId);
@@ -263,7 +282,10 @@ function stopRun(shouldSave) {
   document.getElementById('mainBtn').className = "btn-start";
   document.getElementById('finishBtn').style.display = 'none';
   document.getElementById('displayCard').classList.remove('overtime');
-  document.getElementById('status').innerText = shouldSave ? "紀錄已儲存" : "準備就緒";
+  document.getElementById('status').innerText = isSaved ? "紀錄已儲存" : "準備就緒";
+  // 重置數據
+  document.getElementById('distance').innerText = "0.00";
+  document.getElementById('elapsed').innerText = "00:00";
 }
 
 function formatTime(s) {
@@ -276,23 +298,23 @@ function updatePace() {
   document.getElementById('pace').innerText = formatTime(Math.floor(paceSec));
 }
 
-function saveToHistory() {
-  const records = JSON.parse(localStorage.getItem('run_history_v2') || "[]");
+function saveToHistory(finalKm) {
+  const records = JSON.parse(localStorage.getItem('run_history_v2.2') || "[]");
   const newRec = {
     id: Date.now(),
     date: new Date().toLocaleString(),
-    dist: (totalDist / 1000).toFixed(2),
+    dist: finalKm.toFixed(2),
     time: formatTime(elapsedSec),
     points: trackPoints,
     rawSec: elapsedSec
   };
   records.unshift(newRec);
-  localStorage.setItem('run_history_v2', JSON.stringify(records));
+  localStorage.setItem('run_history_v2.2', JSON.stringify(records));
   renderHistory();
 }
 
 function exportTCX(id) {
-  const records = JSON.parse(localStorage.getItem('run_history_v2'));
+  const records = JSON.parse(localStorage.getItem('run_history_v2.2'));
   const data = records.find(r => r.id === id);
   if (!data) return;
 
@@ -306,12 +328,7 @@ function exportTCX(id) {
         <DistanceMeters>${data.dist * 1000}</DistanceMeters>
         <Track>`;
   data.points.forEach(p => {
-    tcx += `
-          <Trackpoint>
-            <Time>${p.time}</Time>
-            <Position><LatitudeDegrees>${p.lat}</LatitudeDegrees><LongitudeDegrees>${p.lon}</LongitudeDegrees></Position>
-            <DistanceMeters>${p.dist.toFixed(1)}</DistanceMeters>
-          </Trackpoint>`;
+    tcx += `<Trackpoint><Time>${p.time}</Time><Position><LatitudeDegrees>${p.lat}</LatitudeDegrees><LongitudeDegrees>${p.lon}</LongitudeDegrees></Position><DistanceMeters>${p.dist.toFixed(1)}</DistanceMeters></Trackpoint>`;
   });
   tcx += `</Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
 
@@ -323,19 +340,16 @@ function exportTCX(id) {
 }
 
 function renderHistory() {
-  const records = JSON.parse(localStorage.getItem('run_history_v2') || "[]");
+  const records = JSON.parse(localStorage.getItem('run_history_v2.2') || "[]");
   document.getElementById('historyList').innerHTML = records.map(r => `
     <div class="history-item">
       <span>${r.date}<br><small>${r.dist}km / ${r.time}</small></span>
-      <button onclick="exportTCX(${r.id})" style="padding:4px 8px; flex:none; font-size:12px; background:#eee; border:1px solid #ccc;">匯出 TCX</button>
+      <button onclick="exportTCX(${r.id})" style="padding:4px 8px; flex:none; font-size:12px; background:#eee; border:1px solid #ccc;">匯出</button>
     </div>
   `).join('');
 }
 
-window.onload = () => {
-  initTable();
-  renderHistory();
-};
+window.onload = () => { initTable(); renderHistory(); };
 </script>
 </body>
 </html>
