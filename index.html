@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練專業版 V2.5</title>
+<title>跑步教練專業版 V2.6</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root { --primary: #ff6a00; --bg: #f4f7f9; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; }
@@ -11,7 +11,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
 h2 { color: var(--primary); margin: 0 0 10px 0; text-align: center; font-size: 1.2rem; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { border-bottom: 1px solid #eee; padding: 8px 4px; text-align: center; }
-input[type="number"] { width: 50px; padding: 6px; border: 1px solid #ddd; border-radius: 6px; text-align: center; font-size: 16px; }
+input[type="number"] { width: 55px; padding: 6px; border: 1px solid #ddd; border-radius: 6px; text-align: center; font-size: 16px; }
 
 /* 數據面板 */
 .display-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
@@ -19,20 +19,21 @@ input[type="number"] { width: 50px; padding: 6px; border: 1px solid #ddd; border
 .stat-val { font-size: 24px; font-weight: bold; color: var(--primary); display: block; font-family: monospace; }
 .stat-label { font-size: 12px; color: #666; }
 
-/* 門檻微調橫條 */
-.slider-container { margin-top: 15px; padding: 12px; background: #fff; border-radius: 10px; border: 2px solid #eee; }
-input[type="range"] { width: 100%; height: 10px; border-radius: 5px; background: #eee; outline: none; -webkit-appearance: none; margin: 15px 0; }
-input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--primary); border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+/* 按鈕式門檻控制區 */
+.threshold-ctrl { display: flex; align-items: center; justify-content: space-between; margin: 15px 0 10px 0; }
+.btn-adjust { background: #eee; color: #333; border: 1px solid #ccc; width: 60px; height: 50px; border-radius: 10px; font-size: 24px; font-weight: bold; cursor: pointer; }
+.btn-adjust:active { background: #ddd; }
+#thresholdDisplay { font-size: 20px; font-weight: bold; color: var(--primary); min-width: 80px; text-align: center; }
+.step-setting { font-size: 12px; color: #666; text-align: right; margin-top: 5px; }
 
-/* 按鈕 */
-.btn-finish { background: var(--success); color: white; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; display: none; margin-top: 10px; }
-.btn-start { background: var(--primary); color: white; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; }
+/* 主按鈕 */
+.btn-start { background: var(--primary); color: white; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; }
+.btn-finish { background: var(--success); color: white; width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; display: none; margin-top: 10px; }
 
-/* 歷史紀錄 */
+/* 歷史紀錄與軌跡 */
 .history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 .history-btns { display: flex; gap: 5px; margin-top: 8px; }
-button.sm { padding: 6px 12px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; color: white; }
-
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 5px; border: none; cursor: pointer; color: white; }
 #trackModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
 canvas { background: #fff; border-radius: 10px; width: 90vw; height: 90vw; }
 #status { text-align: center; font-weight: bold; padding: 10px; margin-top: 10px; border-radius: 8px; background: #eee; }
@@ -51,23 +52,21 @@ canvas { background: #fff; border-radius: 10px; width: 90vw; height: 90vw; }
   <table>
     <tbody id="planBody"></tbody>
   </table>
-  <div style="margin-top: 15px; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
+  <div style="margin: 15px 0; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
     <div>循環：<input id="loopCount" type="number" oninput="updateLoops(this.value)"> 組</div>
-    <div>預計：<span id="totalPlanTime" style="color:var(--primary); font-weight:bold;">0</span> 分</div>
+    <div>預計時間：<span id="totalPlanTime" style="color:var(--primary); font-weight:bold;">0</span> 分</div>
   </div>
 
-  <div class="slider-container">
-    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold;">
-      <span>🛡️ GPS 過濾門檻 (敏感度)</span>
-      <span id="thresholdDisplay" style="color: var(--primary);">0.30 m</span>
-    </div>
-    <input type="range" id="thresholdSlider" min="0.00" max="1.00" step="0.05" value="0.30" oninput="updateThreshold(this.value)">
-    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #999;">
-      <span>極度敏感(0m)</span><span>正常(0.3m)</span><span>低敏感(1m)</span>
-    </div>
-    <div style="font-size: 11px; color: #666; margin-top: 5px; text-align: center; line-height: 1.4;">
-      ※ 超慢跑建議設為 <b>0.20 - 0.40m</b>。<br>若站立不動里程仍增加，請向右調高。
-    </div>
+  <hr style="border:0; border-top:1px solid #eee;">
+
+  <div style="font-size: 13px; font-weight: bold; margin-bottom: 5px;">🛡️ GPS 過濾門檻 (當前設定)</div>
+  <div class="threshold-ctrl">
+    <button class="btn-adjust" onclick="changeThreshold(-1)">－</button>
+    <div id="thresholdDisplay">0.30 m</div>
+    <button class="btn-adjust" onclick="changeThreshold(1)">＋</button>
+  </div>
+  <div class="step-setting">
+    每次增減：<input id="thresholdStep" type="number" step="0.01" value="0.05" oninput="saveStep(this.value)"> m
   </div>
 </div>
 
@@ -79,25 +78,27 @@ canvas { background: #fff; border-radius: 10px; width: 90vw; height: 90vw; }
     <div class="stat-box"><span class="stat-label">本段剩餘</span><span id="countdown" class="stat-val">--</span></div>
   </div>
   <div id="status">準備就緒</div>
-  <p id="gpsInfo" style="font-size:10px; color:#999; text-align:center; margin-top:8px;">GPS 等待中</p>
+  <p id="gpsInfo" style="font-size:10px; color:#999; text-align:center; margin-top:8px;">等待 GPS 啟動</p>
 </div>
 
 <button id="startBtn" onclick="toggleStart()" class="btn-start">開始訓練</button>
 <button id="finishBtn" onclick="stopAndSave()" class="btn-finish">結束並儲存紀錄</button>
 
 <div style="margin-top: 25px;">
-  <strong>歷史紀錄</strong>
+  <strong>歷史訓練紀錄</strong>
   <div id="historyList" style="margin-top: 10px;"></div>
 </div>
 
 <script>
-/* ---------------- 設定與記憶 ---------------- */
+/* ---------------- 基礎設定與記憶 ---------------- */
 const DEFAULT_PLAN = [
   { name: '熱身', bpm: 180, sec: 180 }, { name: '200間歇', bpm: 200, sec: 60 },
   { name: '210衝刺', bpm: 210, sec: 60 }, { name: '190恢復', bpm: 190, sec: 120 },
   { name: '舒緩', bpm: 180, sec: 180 }
 ];
-let config = JSON.parse(localStorage.getItem('run_config_v2.5')) || { plan: DEFAULT_PLAN, loops: 5, threshold: 0.30 };
+let config = JSON.parse(localStorage.getItem('run_config_v2.6')) || { 
+  plan: DEFAULT_PLAN, loops: 5, threshold: 0.30, thresholdStep: 0.05 
+};
 
 function initTable() {
   document.getElementById('planBody').innerHTML = config.plan.map((s, i) => `
@@ -106,38 +107,49 @@ function initTable() {
     <td>秒數 <input type="number" value="${s.sec}" oninput="updateConfig(${i},'sec',this.value)"></td></tr>
   `).join('');
   document.getElementById('loopCount').value = config.loops;
-  document.getElementById('thresholdSlider').value = config.threshold;
   document.getElementById('thresholdDisplay').innerText = parseFloat(config.threshold).toFixed(2) + " m";
+  document.getElementById('thresholdStep').value = config.thresholdStep;
   calcTotalPlanTime();
 }
+
+/* ---------------- 門檻按鈕控制 ---------------- */
+function changeThreshold(direction) {
+  const step = parseFloat(document.getElementById('thresholdStep').value) || 0.05;
+  let current = parseFloat(config.threshold);
+  current += (direction * step);
+  
+  if (current < 0) current = 0;
+  if (current > 5) current = 5; // 安全上限
+  
+  config.threshold = current;
+  document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2) + " m";
+  saveCfg();
+}
+
+function saveStep(v) { config.thresholdStep = parseFloat(v) || 0.05; saveCfg(); }
+
+/* ---------------- 儲存與計算 ---------------- */
 function updateConfig(i, k, v) { config.plan[i][k] = parseInt(v)||0; saveCfg(); }
 function updateLoops(v) { config.loops = parseInt(v)||1; saveCfg(); }
-function updateThreshold(v) { 
-  config.threshold = parseFloat(v); 
-  document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2) + " m";
-  saveCfg(); 
-}
-function saveCfg() { localStorage.setItem('run_config_v2.5', JSON.stringify(config)); calcTotalPlanTime(); }
+function saveCfg() { localStorage.setItem('run_config_v2.6', JSON.stringify(config)); calcTotalPlanTime(); }
 function calcTotalPlanTime() {
   const p = config.plan;
   const sec = p[0].sec + ((p[1].sec + p[2].sec + p[3].sec) * config.loops) + p[4].sec;
   document.getElementById('totalPlanTime').innerText = (sec/60).toFixed(1);
 }
 
-/* ---------------- 核心變數 ---------------- */
+/* ---------------- 核心執行邏輯 ---------------- */
 let isRunning = false, elapsedSec = 0, totalDist = 0;
 let watchId = null, timerId = null, trackPoints = [], audioCtx = null, lastPos = null;
 
-/* ---------------- GPS 邏輯 (使用即時調整的門檻) ---------------- */
 function startGPS() {
   if (!navigator.geolocation) return;
   watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
-    document.getElementById('gpsInfo').innerText = `GPS 精度: ±${Math.round(accuracy)}m (門檻: ${config.threshold.toFixed(2)}m)`;
+    document.getElementById('gpsInfo').innerText = `精度: ±${Math.round(accuracy)}m (門檻: ${config.threshold.toFixed(2)}m)`;
     if (accuracy < 60) {
       if (lastPos) {
         const d = haversine(lastPos.lat, lastPos.lon, lat, lon);
-        // 使用 config.threshold 動態判定
         if (d > config.threshold && d < 50) { 
           totalDist += d;
           document.getElementById('distance').innerText = (totalDist/1000).toFixed(3);
@@ -157,7 +169,6 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-/* ---------------- 音效 ---------------- */
 function playBeep() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -167,7 +178,6 @@ function playBeep() {
   o.stop(audioCtx.currentTime + 0.12);
 }
 
-/* ---------------- 執行邏輯 ---------------- */
 async function runSession() {
   isRunning = true; elapsedSec = 0; totalDist = 0; trackPoints = []; lastPos = null;
   startGPS();
@@ -212,54 +222,50 @@ function stopAndSave() {
   isRunning = false;
   clearInterval(timerId);
   if (watchId) navigator.geolocation.clearWatch(watchId);
-  
-  // 存入紀錄
   if (totalDist > 0 || elapsedSec > 10) {
-    const records = JSON.parse(localStorage.getItem('run_history_v2.5') || "[]");
+    const records = JSON.parse(localStorage.getItem('run_history_v2.6') || "[]");
     records.unshift({
       id: Date.now(), date: new Date().toLocaleString(),
       dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec),
       points: trackPoints, rawSec: elapsedSec
     });
-    localStorage.setItem('run_history_v2.5', JSON.stringify(records));
+    localStorage.setItem('run_history_v2.6', JSON.stringify(records));
   }
-  
-  // 重置 UI
-  location.reload(); // 點擊儲存後重新整理畫面最乾淨
+  location.reload(); 
 }
 
-/* ---------------- 歷史與輔助 ---------------- */
+/* ---------------- 歷史與繪圖 ---------------- */
 function renderHistory() {
-  const records = JSON.parse(localStorage.getItem('run_history_v2.5') || "[]");
+  const records = JSON.parse(localStorage.getItem('run_history_v2.6') || "[]");
   document.getElementById('historyList').innerHTML = records.map(r => `
     <div class="history-card">
       <div style="font-size:12px; color:#888;">📅 ${r.date} | ⏱️ ${r.time}</div>
       <div style="font-size:16px; font-weight:bold; margin:5px 0;">🏃 ${r.dist} km</div>
       <div class="history-btns">
-        <button class="sm" style="background:var(--info);" onclick="viewTrack(${r.id})">查看軌跡</button>
-        <button class="sm" style="background:var(--success);" onclick="editDist(${r.id})">修正里程</button>
-        <button class="sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
+        <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
+        <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
+        <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
       </div>
     </div>
   `).join('');
 }
 
 function editDist(id) {
-  const records = JSON.parse(localStorage.getItem('run_history_v2.5'));
+  const records = JSON.parse(localStorage.getItem('run_history_v2.6'));
   const idx = records.findIndex(r => r.id === id);
   const newVal = prompt("修正里程 (km):", records[idx].dist);
-  if (newVal) { records[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem('run_history_v2.5', JSON.stringify(records)); renderHistory(); }
+  if (newVal) { records[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem('run_history_v2.6', JSON.stringify(records)); renderHistory(); }
 }
 
 function deleteRec(id) {
   if (confirm("刪除紀錄？")) {
-    const records = JSON.parse(localStorage.getItem('run_history_v2.5')).filter(r => r.id !== id);
-    localStorage.setItem('run_history_v2.5', JSON.stringify(records)); renderHistory();
+    const records = JSON.parse(localStorage.getItem('run_history_v2.6')).filter(r => r.id !== id);
+    localStorage.setItem('run_history_v2.6', JSON.stringify(records)); renderHistory();
   }
 }
 
 function viewTrack(id) {
-  const r = JSON.parse(localStorage.getItem('run_history_v2.5')).find(r => r.id === id);
+  const r = JSON.parse(localStorage.getItem('run_history_v2.6')).find(r => r.id === id);
   if (!r.points || r.points.length < 2) return alert("紀錄不足");
   document.getElementById('trackModal').style.display = 'flex';
   const cvs = document.getElementById('trackCanvas'), ctx = cvs.getContext('2d');
